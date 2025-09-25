@@ -17,6 +17,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "biopython>=1.85",
     "matplotlib>=3.10.6",
     "numpy>=2.2.6",
     "pandas>=2.3.2",

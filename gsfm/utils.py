@@ -259,6 +259,20 @@ def model_tokenizer_from_ckpt_from_directory(ckpt: str, config: dict = None, map
   with from_directory(str(pathlib.Path(ckpt).parent.parent.parent.parent)):
     return model_tokenizer_from_ckpt(ckpt, config, map_location)
 
+def co_occurrence(it_factory):
+  all_genes = set()
+  for genes in it_factory():
+    all_genes.update(genes)
+  all_genes = ['', *all_genes]
+  all_gene_lookup = {gene: i for i, gene in enumerate(all_genes)}
+  
+  values = np.zeros(shape=(len(all_genes), len(all_genes)), dtype=np.int64)
+  for genes in tqdm(it_factory()):
+    mask = [all_gene_lookup[gene] for gene in {'',*filter(None, genes)}]
+    values[np.ix_(mask, mask)] += 1
+
+  return pd.DataFrame(values, index=all_genes, columns=all_genes)
+
 def get_ncbi_lookup():
   human_geneinfo = pd.read_csv('data/Homo_sapiens.gene_info.gz', sep='\t')
   mouse_geneinfo = pd.read_csv('data/Mus_musculus.gene_info.gz', sep='\t')

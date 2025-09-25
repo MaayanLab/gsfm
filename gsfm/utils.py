@@ -1,22 +1,24 @@
 import contextlib
-import functools
 import importlib
 import inspect
-import lightning as L
-import numpy as np
+import multiprocessing as mp
 import os
-import pandas as pd
 import pathlib
 import pickle
 import sys
 import tempfile
-import torch
 import urllib.request
-import yaml
+from collections import Counter
 from datetime import datetime
-from tqdm.auto import tqdm
-from huggingface_hub import PyTorchModelHubMixin, HfApi, hf_hub_download
 
+import lightning as L
+import numpy as np
+import pandas as pd
+import scipy.stats as st
+import torch
+import yaml
+from huggingface_hub import HfApi, PyTorchModelHubMixin, hf_hub_download
+from tqdm.auto import tqdm
 
 def if_not_exists(local, invalidate=False):
   def decorator(fn):
@@ -60,7 +62,6 @@ def chunked(L, cs):
   if C: yield C
 
 def norm(x: pd.Series, eps=1e-6):
-  import scipy.stats as st
   if isinstance(x, pd.Series):
     mu, std = st.norm.fit(x.values)
     return pd.Series(st.norm.cdf((x.values-mu)/(std+eps)), index=x.index)
@@ -113,7 +114,6 @@ def partition_padded_tensor(indices: torch.Tensor, partition: float = 0.5, paddi
   return x, y
 
 def mp_run(fn, *args, **kwargs):
-  import multiprocessing as mp
   proc = mp.get_context('spawn').Process(target=fn, args=args, kwargs=kwargs)
   proc.start()
   proc.join()
@@ -138,11 +138,6 @@ class MLP(torch.nn.Module):
       x = layer(x)
     return x
 
-# class Vocab:
-#   @staticmethod
-#   def build_vocab_from_iterator(*args, **kwargs):
-#     import torchtext.vocab
-#     return torchtext.vocab.build_vocab_from_iterator(*args, **kwargs)
 class Vocab:
   def __init__(self, vocab, default_index=0):
     self.vocab = vocab
@@ -157,7 +152,6 @@ class Vocab:
     vocab = []
     if special_first:
       vocab += specials
-    from collections import Counter
     tokens = Counter()
     for sentence in it:
       tokens.update(sentence)

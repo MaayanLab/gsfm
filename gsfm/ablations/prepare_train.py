@@ -32,7 +32,7 @@ PMC_year_lookup
 #%%
 gene_set_hashes = set()
 with open('data/2025-08-29-rummagene.gmt', 'w') as fw:
-  for term, desc, gene_set in tqdm(read_gmt('data/latest.gmt')):
+  for term, desc, gene_set in tqdm(utils.read_gmt('data/latest.gmt')):
     if frozenset(gene_set) in gene_set_hashes: continue # no gene sets
     pmcid = term.partition('-')[0]
     year = PMC_year_lookup.get(pmcid)
@@ -46,7 +46,7 @@ with open('data/2025-08-29-rummagene.gmt', 'w') as fw:
 #%%
 human_rummageo_GSEs = pd.Series({
   term: gse
-  for term, _, _ in read_gmt('data/human-geo-auto.gmt')
+  for term, _, _ in utils.read_gmt('data/human-geo-auto.gmt')
   for gses in (term.partition('-')[0],)
   for gse in gses.split(',')
 }).to_frame('GSE')
@@ -74,7 +74,7 @@ GSE_year_lookup = d.groupby('GSE')['Year'].min().to_dict()
 #%%
 gene_set_hashes = set()
 with open('data/2025-08-29-rummageo-human.gmt', 'w') as fw:
-  for term, desc, gene_set in tqdm(read_gmt('data/human-geo-auto.gmt')):
+  for term, desc, gene_set in tqdm(utils.read_gmt('data/human-geo-auto.gmt')):
     if frozenset(gene_set) in gene_set_hashes: continue # no gene sets
     gse = term.partition('-')[0]
     year = GSE_year_lookup.get(gse)
@@ -85,7 +85,7 @@ with open('data/2025-08-29-rummageo-human.gmt', 'w') as fw:
 # %%
 mouse_rummageo_GSEs = pd.Series({
   term: gse
-  for term, _, _ in read_gmt('data/mouse-geo-auto.gmt')
+  for term, _, _ in utils.read_gmt('data/mouse-geo-auto.gmt')
   for gses in (term.partition('-')[0],)
   for gse in gses.split(',')
 }).to_frame('GSE')
@@ -113,7 +113,7 @@ GSE_year_lookup = d.groupby('GSE')['Year'].min().to_dict()
 #%%
 gene_set_hashes = set()
 with open('data/2025-08-29-rummageo-mouse.gmt', 'w') as fw:
-  for term, desc, gene_set in tqdm(read_gmt('data/mouse-geo-auto.gmt')):
+  for term, desc, gene_set in tqdm(utils.read_gmt('data/mouse-geo-auto.gmt')):
     if frozenset(gene_set) in gene_set_hashes: continue # no gene sets
     gse = term.partition('-')[0]
     year = GSE_year_lookup.get(gse)

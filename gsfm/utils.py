@@ -258,3 +258,51 @@ def model_tokenizer_from_ckpt(ckpt: str, config: dict = None, map_location=torch
 def model_tokenizer_from_ckpt_from_directory(ckpt: str, config: dict = None, map_location=torch.device('cuda')):
   with from_directory(str(pathlib.Path(ckpt).parent.parent.parent.parent)):
     return model_tokenizer_from_ckpt(ckpt, config, map_location)
+
+def get_ncbi_lookup():
+  human_geneinfo = pd.read_csv('data/Homo_sapiens.gene_info.gz', sep='\t')
+  mouse_geneinfo = pd.read_csv('data/Mus_musculus.gene_info.gz', sep='\t')
+  geneinfo = pd.concat([human_geneinfo, mouse_geneinfo]).drop_duplicates(['GeneID'])
+
+  def maybe_split(record):
+    ''' NCBI Stores Nulls as '-' and lists '|' delimited
+    '''
+    if record in {'', '-'}:
+      return set()
+    return set(record.split('|'))
+  #
+  def supplement_dbXref_prefix_omitted(ids):
+    ''' NCBI Stores external IDS with Foreign:ID while most datasets just use the ID
+    '''
+    for id in ids:
+      # add original id
+      yield id
+      # also add id *without* prefix
+      if ':' in id:
+        yield id.split(':', maxsplit=1)[1]
+  #
+  geneinfo['All_synonyms'] = [
+    set.union(
+      maybe_split(row['Symbol']),
+      maybe_split(row['Symbol_from_nomenclature_authority']),
+      maybe_split(str(row['GeneID'])),
+      maybe_split(row['Synonyms']),
+      maybe_split(row['Other_designations']),
+      maybe_split(row['LocusTag']),
+      set(supplement_dbXref_prefix_omitted(maybe_split(row['dbXrefs']))),
+    )
+    for _, row in geneinfo.iterrows()
+  ]
+
+  synonyms, symbols = zip(*{
+    (synonym, row['Symbol'])
+    for _, row in geneinfo.iterrows()
+    for synonym in row['All_synonyms']
+  })
+  ncbi_lookup = pd.Series(symbols, index=synonyms)
+  index_values = ncbi_lookup.index.value_counts()
+  ambiguous = index_values[index_values > 1].index
+  ncbi_lookup_disambiguated = ncbi_lookup[(
+    (ncbi_lookup.index == ncbi_lookup) | (~ncbi_lookup.index.isin(ambiguous))
+  )]
+  return ncbi_lookup_disambiguated

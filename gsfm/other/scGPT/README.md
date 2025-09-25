@@ -107,6 +107,16 @@ df_gene_embeddings.to_csv(data_dir/'scGPT_embed.tsv', sep='\t')
 import sklearn.metrics.pairwise
 scgpt_gene_gene = pd.DataFrame(sklearn.metrics.pairwise.cosine_similarity(df_gene_embeddings.values), index=df_gene_embeddings.index, columns=df_gene_embeddings.index)
 
+from gsfm import utils
+ncbi_lookup_disambiguated = utils.get_ncbi_lookup()
+
+scgpt_index_resolved = scgpt_gene_gen.index.map(ncbi_lookup_disambiguated.get)
+mask = ~pd.isna(scgpt_index_resolved)
+scgpt_gene_gen = scgpt_gene_gen.loc[mask, mask]
+scgpt_gene_gen.index = scgpt_gene_gen.columns = scgpt_index_resolved[mask]
+mask = ~scgpt_gene_gen.index.duplicated()
+scgpt_gene_gen = scgpt_gene_gen.loc[mask, mask]
+
 gene_gene_similarities = pd.HDFStore(data_dir/'gene_gene_similarities.h5', 'a')
 gene_gene_similarities['scgpt'] = scgpt_gene_gene
 gene_gene_similarities.close()

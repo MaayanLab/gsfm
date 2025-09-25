@@ -39,6 +39,15 @@ df_gene_emb.to_csv(data_dir/'geneformer_embed.tsv', sep='\t')
 import sklearn.metrics.pairwise
 geneformer_gene_gene = pd.DataFrame(sklearn.metrics.pairwise.cosine_similarity(df_gene_emb.values), index=df_gene_emb.index, columns=df_gene_emb.index)
 
+from gsfm import utils
+ncbi_lookup_disambiguated = utils.get_ncbi_lookup()
+
+geneformer_index_resolved = geneformer_gene_gene.index.map(ncbi_lookup_disambiguated.get)
+geneformer_gene_gene.groupby(ncbi_lookup_disambiguated).mean()
+mask = ~pd.isna(geneformer_index_resolved)
+geneformer_gene_gene = geneformer_gene_gene.loc[mask, mask]
+geneformer_gene_gene.index = geneformer_gene_gene.columns = geneformer_index_resolved[mask]
+
 gene_gene_similarities = pd.HDFStore(data_dir/'gene_gene_similarities.h5', 'a')
 gene_gene_similarities['geneformer'] = geneformer_gene_gene
 gene_gene_similarities.close()

@@ -184,7 +184,7 @@ for d in ['2025-05-07', '2025-05-09', '2025-05-27']:
         yaml.safe_load((f.parent/'hparams.yaml').read_bytes()),
         model_cls=f"{ctx['model_cls_mod']}.{ctx['model_cls_name']}",
         data_cls=ctx['data_cls_name'],
-        benchmarks=f"/home/u8sand/Programs/work/experiments/genesetformer/{d}/data/{d}/gene-function-prediction--*--{f.parent.name}e{epochs}.tsv",
+        benchmarks=f"genesetformer/{d}/data/{d}/gene-function-prediction--*--{f.parent.name}e{epochs}.tsv",
         epochs=epochs,
       )
 

@@ -53,7 +53,7 @@ human_rummageo_GSEs = pd.Series({
 
 #%%
 import h5py
-f = h5py.File('/home/u8sand/Programs/work/Downloads/human_gene_v2.latest.h5', 'r')
+f = h5py.File('data/human_gene_v2.latest.h5', 'r')
 
 human_GSEs = pd.DataFrame({
   'submission_date': f['meta/samples/submission_date'].asstr()[:],
@@ -92,7 +92,7 @@ mouse_rummageo_GSEs = pd.Series({
 
 #%%
 import h5py
-f = h5py.File('/home/u8sand/Programs/work/Downloads/mouse_gene_v2.latest.h5', 'r')
+f = h5py.File('data/mouse_gene_v2.latest.h5', 'r')
 
 mouse_GSEs = pd.DataFrame({
   'submission_date': f['meta/samples/submission_date'].asstr()[:],

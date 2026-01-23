@@ -133,5 +133,5 @@ fig.legend(
   fancybox=True,
 )
 g.legend_.remove()
-plt.savefig('/home/u8sand/Downloads/pca.pdf', bbox_inches='tight')
+plt.savefig('data/pca.pdf', bbox_inches='tight')
 plt.show()

@@ -102,7 +102,7 @@ gene_embeddings = {gene: gene_embeddings[i] for i, gene in enumerate(gene2idx.ke
 
 df_gene_embeddings = pd.DataFrame(gene_embeddings).T
 df_gene_embeddings.to_csv(data_dir/'scGPT_embed.tsv', sep='\t')
-# df_gene_embeddings = pd.read_csv('/home/u8sand/Programs/work/experiments/genesetformer/2025-09-04/scGPT/scGPT_embed.tsv', sep='\t', index_col=0)
+# df_gene_embeddings = pd.read_csv('genesetformer/2025-09-04/scGPT/scGPT_embed.tsv', sep='\t', index_col=0)
 
 import sklearn.metrics.pairwise
 scgpt_gene_gene = pd.DataFrame(sklearn.metrics.pairwise.cosine_similarity(df_gene_embeddings.values), index=df_gene_embeddings.index, columns=df_gene_embeddings.index)

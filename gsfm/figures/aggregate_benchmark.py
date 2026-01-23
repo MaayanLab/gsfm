@@ -9,7 +9,7 @@ import functools
 #%%
 @functools.cache
 def get_model_config(model_base, model_version):
-  model_path = pathlib.Path(f"~/Programs/work/experiments/genesetformer/{model_base}/lightning_logs/{model_version}/config.yaml").expanduser()
+  model_path = pathlib.Path(f"genesetformer/{model_base}/lightning_logs/{model_version}/config.yaml").expanduser()
   if not model_path.exists():
     return None
   with model_path.open('r') as fr:
@@ -19,7 +19,7 @@ def get_model_config(model_base, model_version):
 #%%
 df = pd.concat([
   pd.read_csv(f, sep='\t')
-  for f in pathlib.Path('data/classic-benchmark/2025-09-08').rglob('scores.tsv')
+  for f in pathlib.Path('genesetformer/data/classic-benchmark/2025-09-08').rglob('scores.tsv')
 ])
 
 def rename_model(row):
@@ -132,7 +132,7 @@ sns.heatmap(
   vmax=1.0,
 )
 plt.title('Median AUROC')
-plt.savefig('all-results-auroc.pdf', bbox_inches='tight')
+plt.savefig('data/all-results-auroc.pdf', bbox_inches='tight')
 
 #%%
 df_ = df.groupby(['model_name', 'name', 'term'])['es'].median().reset_index()
@@ -146,7 +146,7 @@ sns.heatmap(
   vmax=1.0,
 )
 plt.title('Median Enrichment Score')
-plt.savefig('all-results-es.pdf', bbox_inches='tight')
+plt.savefig('data/all-results-es.pdf', bbox_inches='tight')
 
 #%%
 df_ = df.groupby(['model_name', 'name', 'term'])['ap'].mean().reset_index()
@@ -160,6 +160,126 @@ sns.heatmap(
   # vmax=1.0,
 )
 plt.title('Average Precision')
-plt.savefig('all-results-ap.pdf', bbox_inches='tight')
+plt.savefig('data/all-results-ap.pdf', bbox_inches='tight')
 
 # %%
+import scipy
+import starbars
+import matplotlib
+matplotlib.rc('xtick', labelsize=15) 
+matplotlib.rc('ytick', labelsize=15)
+matplotlib.rcParams['axes.grid'] = True
+matplotlib.rcParams['savefig.transparent'] = True
+
+def make_plot_for(df, names):
+  df_ = df[df['name'].isin(list(names))]
+  pvals = []
+  fig, ((ax11, ax12), (ax21, ax22), (ax31, ax32), (ax41, ax42)) = plt.subplots(4, 2, figsize=(18,36), dpi=600, constrained_layout=True)
+  for (ax_label, ax), (library, d) in zip([('A', ax11), ('B', ax12), ('C', ax21), ('D', ax22), ('C', ax31), ('D', ax32), ('E', ax41), ('F', ax42)], df_.groupby('library')):
+    d['name'] = d['name'].replace(names)
+    y_order = list(d.groupby('name')['roc_auc'].median().sort_values(ascending=False).index)
+    annotations = []
+
+    for left, right in zip(y_order, y_order[1:]):
+      x, y = d[d['name']==left], d[d['name']==right]
+      left_roc_auc_mean = x.groupby(['term'])['roc_auc'].median().mean()
+      left_roc_auc_std = x.groupby(['term'])['roc_auc'].median().std()
+      right_roc_auc_mean = y.groupby(['term'])['roc_auc'].median().mean()
+      right_roc_auc_std = y.groupby(['term'])['roc_auc'].median().std()
+      x, y = x.groupby(['term'])['roc_auc'].median().align(y.groupby(['term'])['roc_auc'].median(), join='inner')
+      # _, p_value = scipy.stats.ttest_rel(x, y)
+      _, p_value = scipy.stats.ttest_ind(x, y, equal_var=False)
+      if p_value <= 0.01:
+        annotations.append((left, right, p_value))
+        pvals.append(dict(
+          library=library,
+          left=left,
+          left_roc_auc_mean=left_roc_auc_mean,
+          left_roc_auc_std=left_roc_auc_std,
+          right_roc_auc_mean=right_roc_auc_mean,
+          right_roc_auc_std=right_roc_auc_std,
+          right=right,
+          p_value=p_value,
+        ))
+    sns.boxenplot(d, x='roc_auc', y='name', order=y_order, ax=ax, native_scale=True)
+    ax.set_title(library.replace('_', ' '), fontsize=18)
+    ax.set_xlabel('Median AUROC', fontsize=16)
+    ax.set_ylabel('')
+    ax.set_xlim((0.0, 1.0))
+    starbars.draw_annotation(annotations, ax=ax, mode='horizontal', h_gap=0, bar_gap=0.1, fontsize=10)
+    ax.set_xlim((0.0, 1.2))
+    for ticklabel, tick in zip(ax.xaxis.get_ticklabels(), ax.xaxis.get_major_ticks()):
+      text = ticklabel.get_text()
+      try:
+        if text and float(text) > 1:
+          tick.set_visible(False)
+      except ValueError: pass
+    leftmost, rightmost = ax.get_xlim()
+    ax.spines[['top', 'left', 'right', 'bottom']].set_visible(False)
+    bottommost, topmost = ax.get_ylim()
+    ax.axhline(bottommost, 0, 0.875, color='0')
+    ax.axhline(topmost, 0, 0.875, color='0')
+    ax.axvline(leftmost, color='0')
+    ax.axvline(1.05, color='0')
+    ax.text(-0.1, 1.1, ax_label, transform=ax.transAxes, size=20, weight='bold')
+  fig.tight_layout()
+  return fig, pvals
+
+
+#%%
+print('\n'.join(df['model_name'].unique()))
+
+#%%
+print('\n'.join(df['name'].unique()))
+
+#%%
+names = [
+  'KEGG_2021',
+  'Wiki_Pathways_2024',
+  'ChEA_2022',
+  'GO_BP_2025',
+  'GO_MF_2025',
+  'MGI_2024',
+  'GO_CC_2025',
+  'GWAS_Catalog_2025',
+]
+model_names = {
+'Uniform':'Random',
+'GSFM Rummagene year<2015':'GSFM Rummagene year<2015',
+'GSFM Rummagene noise=4.0':'GSFM Rummagene noise=4.0',
+'GSFM Rummagene max_setsize=50':'GSFM Rummagene max_setsize=50',
+'GSFM Rummagene':'GSFM Rummagene',
+'GSFM Rummagene no-mito':'GSFM Rummagene no-mito',
+'GSFM RummaGEO/Gene':'GSFM RummaGEO/Gene',
+'GSFM RummaGEO':'GSFM RummaGEO',
+'GenePT Gene-Gene Similarity':'GenePT Sim',
+'Rummagene Gene-Gene Similarity':'Rummagene Sim',
+'ARCHS4 Co-Expression 2021 Gene-Gene Similarity':'ARCHS4 Co-Expression 2021',
+'Geneformer Gene-Gene Similarity':'Geneformer Sim',
+'Tagger 2021 Gene-Gene Similarity':'Tagger 2021 Sim',
+'Node2Vec (Rummagene > 0.5) Gene-Gene Similarity':'Node2Vec Sim',
+'RummaGEO/Gene Gene-Gene Similarity':'RummaGEO/Gene Sim',
+'RummaGEO Gene-Gene Similarity':'RummaGEO Sim',
+'scGPT Gene-Gene Similarity':'scGPT Sim',
+'deepNF (Rummagene > 0.5) Gene-Gene Similarity':'deepNF Sim',
+'GeneRIF 2021 Gene-Gene Similarity':'GeneRIF 2021 Sim',
+'Enrichr User List Co-Occurrence 2024 Gene-Gene Similarity':'Enrichr User List Co-Occurrence 2024 Sim',
+}
+d = df[df['name'].isin(names) & df['model_name'].isin(model_names.keys())].copy()
+d['model_name'] = d['model_name'].replace(model_names)
+
+#%%
+fig, pvals = make_plot_for(df[df['name'].isin(names)].rename({
+  'name': 'library',
+  'model_name': 'name',
+}, axis=1), model_names)
+
+#%%
+pd.DataFrame(pvals).sort_values('left_roc_auc_mean', ascending=False)
+
+#%%
+fig.savefig('data/main-benchmark.pdf')
+
+#%%
+pd.DataFrame(pvals).to_csv('data/main-benchmark-pvals.tsv', sep='\t')
+

@@ -1,5 +1,4 @@
 #%%
-import numpy as np
 import pathlib
 import torch
 import seaborn as sns
@@ -9,10 +8,9 @@ from sklearn.decomposition import PCA
 from matplotlib import pyplot as plt
 from gsfm import Vocab, GSFM
 from sklearn.feature_extraction.text import TfidfVectorizer
-import itertools
-import collections
+import glasbey
+import sklearn.cluster
 import re
-from tqdm.auto import tqdm
 
 #%%
 def read_gmt(f):
@@ -24,29 +22,22 @@ def read_gmt(f):
       yield term, desc, genes
 
 #%%
-def classic_tfid_umap(gmt):
+def multihot(gmt):
   keys, values = zip(*gmt.items())
-  vectorized = TfidfVectorizer(analyzer=lambda gs: gs).fit_transform(values)
+  return pd.DataFrame([{g: 1 for g in gs} for gs in values], index=keys).fillna(0)
+
+def idf(gmt):
+  keys, values = zip(*gmt.items())
+  return TfidfVectorizer(analyzer=lambda gs: gs).fit_transform(values)
+
+def umap(vectorized):
   return pd.DataFrame(
     UMAP(random_state=42).fit_transform(vectorized),
     columns=['UMAP-1', 'UMAP-2'],
     index=keys,
   )
 
-#%%
-def classic_mh_umap(gmt):
-  keys, values = zip(*gmt.items())
-  vectorized = pd.DataFrame([{g: 1 for g in gs} for gs in values], index=keys).fillna(0)
-  return pd.DataFrame(
-    UMAP(random_state=42).fit_transform(vectorized),
-    columns=['UMAP-1', 'UMAP-2'],
-    index=keys,
-  )
-
-#%%
-def classic_mh_pca(gmt):
-  keys, values = zip(*gmt.items())
-  vectorized = pd.DataFrame([{g: 1 for g in gs} for gs in values], index=keys).fillna(0)
+def pca(vectorized):
   pca = PCA()
   view = pca.fit_transform(vectorized)[:, [0, 1]]
   return pd.DataFrame(
@@ -54,119 +45,93 @@ def classic_mh_pca(gmt):
     columns=[f"PC-1 {pca.explained_variance_ratio_[0]*100:0.2f}%", f"PC-2 {pca.explained_variance_ratio_[1]*100:0.2f}%"],
     index=keys,
   )
-#%%
-def classic_tfid_pca(gmt):
-  keys, values = zip(*gmt.items())
-  vectorized = TfidfVectorizer(analyzer=lambda gs: gs).fit_transform(values)
-  pca = PCA()
-  view = pca.fit_transform(vectorized)[:, [0, 1]]
-  return pd.DataFrame(
-    view,
-    columns=[f"PC-1 {pca.explained_variance_ratio_[0]*100:0.2f}%", f"PC-2 {pca.explained_variance_ratio_[1]*100:0.2f}%"],
-    index=keys,
-  )
+
+def hdbscan(vectorized):
+  hdbscan = sklearn.cluster.HDBSCAN()
+  return pd.Series(hdbscan.fit_predict(vectorized), index=keys).astype(str)
+
 #%%
 # load gsfm vocabulary and model weights
-vocab = Vocab.from_pretrained('maayanlab/gsfm')
-gsfm = GSFM.from_pretrained('maayanlab/gsfm')
+vocab = Vocab.from_pretrained('maayanlab/gsfm-rummagene')
+gsfm = GSFM.from_pretrained('maayanlab/gsfm-rummagene')
 gsfm.eval()
 
 #%%
-def gsfm_umap(gmt):
+def gsfm_encode(gmt):
   keys, values = zip(*gmt.items())
   token_ids = torch.nn.utils.rnn.pad_sequence([torch.tensor(vocab(geneset)) for geneset in values], padding_value=1, batch_first=True)
-  encoding = gsfm.encode(token_ids).detach().cpu().numpy()
-  return pd.DataFrame(
-    UMAP(random_state=42).fit_transform(encoding),
-    columns=['UMAP-1', 'UMAP-2'],
-    index=keys,
-  )
+  return gsfm.encode(token_ids).detach().cpu().numpy()
 
 #%%
-def gsfm_pca(gmt):
-  keys, values = zip(*gmt.items())
-  token_ids = torch.nn.utils.rnn.pad_sequence([torch.tensor(vocab(geneset)) for geneset in values], padding_value=1, batch_first=True)
-  encoding = gsfm.encode(token_ids).detach().cpu().numpy()
-  pca = PCA()
-  view = pca.fit_transform(encoding)
-  return pd.DataFrame(
-    view,
-    columns=[
-      f"PC-{n} {r*100:0.2f}%"
-      for n, r in enumerate(pca.explained_variance_ratio_, start=1)
-    ],
-    index=keys,
-  )
-
-#%%
-keys, _, values = zip(*read_gmt('GTEx_Tissues_2023.gmt'))
+keys, _, values = zip(*read_gmt('data/GTEx_Tissues_V8_2023.gmt'))
 GMT = dict(zip(keys, values))
-
-
-# %%
-hue = {key: m.group(5) for key in keys for m in (re.match(r'(.+?)( - (.+?))? (Male|Female) (.+?) (Up|Down)', key),) }
+hue = pd.Series({key: m.group(1) for key in keys for m in (re.match(r'(.+?)( - (.+?))? (Male|Female) (.+?) (Up|Down)', key),) }, name='Organ')
 
 #%%
-def scatter(pca, hue):
+palette = dict(zip(hue.unique(), glasbey.create_palette(hue.nunique())))
+
+#%%
+def scatter(title, pca, hue=None, palette=None, ax=None):
   x, y, *_ = pca.columns
-  ax = sns.scatterplot(
+  sax = sns.scatterplot(
     pca,
     x=x,
     y=y,
-    s=10,
+    s=hue.apply(lambda hue: 20 if hue else 1) if hue is not None and hue.nunique() == 2 else 10,
     legend=True,
-    hue=hue,
+    hue=hue.astype(str) if hue is not None else None,
+    palette=palette,
+    ax=ax,
   )
-  sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+  plt.legend(markerscale=2)
+  sax.set_title(title)
+  if hue is not None:
+    sns.move_legend(sax, "upper left", bbox_to_anchor=(1, 1))
   plt.show()
 
 #%%
-scatter(classic_mh_pca(GMT), hue)
-scatter(classic_tfid_pca(GMT), hue)
-scatter(classic_tfid_umap(GMT), hue)
-scatter(gsfm_umap(GMT), hue)
-#%%
-scatter(gsfm_pca(GMT), hue)
+scatter('classic_mh_pca', pca(multihot(GMT)), hue, palette)
+scatter('classic_tfid_umap', umap(idf(GMT)), hue, palette)
+scatter('gsfm_umap', umap(gsfm_encode(GMT)), hue, palette)
+scatter('PCA(IDF(GTEx))', pca(idf(GMT)), hue, palette)
+scatter('PCA(GSFM.Encode(GTEx))', pca(gsfm_encode(GMT)), hue, palette)
 
 #%%
-gsfm_pca(GMT).corrwith(pd.get_dummies(pd.Series(hue))['20-29']).sort_values()
+X_pca = pca(idf(GMT))
+X_gsfm_pca = pca(gsfm_encode(GMT))
 
-
-#%%
-scatter(gsfm_pca(GMT)[['PC-49 0.24%', 'PC-59 0.18%']], hue)
-
-
-#%%
-gsfm_pca(GMT)
-
-#%%
-keys, _, values = zip(*read_gmt('Tabula_Sapiens.gmt'))
-GMT = dict(zip(keys, values))
-
-#%%
-keys
-#%%
-hue = pd.Series({key: m.group(1) for key in keys for m in (re.match(r'(.+?)-(.+)', key),) })
-hue.name = 'hue'
-
-#%%
-ax = sns.scatterplot(
-  classic_mh_umap(GMT).merge(hue, left_index=True, right_index=True),
-  x='UMAP-1',
-  y='UMAP-2',
-  # s=10,
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10,4))
+x, y, *_ = X_pca.columns
+g = sns.scatterplot(
+  X_pca,
+  x=x,
+  y=y,
+  s=10,
+  legend=False,
+  hue=hue,
+  palette=palette,
+  ax=ax1,
+)
+ax1.set_title('PCA(IDF(GTEx_Tissues_V8_2023))')
+x, y, *_ = X_gsfm_pca.columns
+g = sns.scatterplot(
+  X_gsfm_pca,
+  x=x,
+  y=y,
+  s=10,
   legend=True,
   hue=hue,
+  palette=palette,
+  ax=ax2,
 )
-sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
-
-#%%
-ax = sns.scatterplot(
-  gsfm_umap(GMT).merge(hue, left_index=True, right_index=True),
-  x='UMAP-1',
-  y='UMAP-2',
-  # s=10,
-  hue=hue,
-  legend=True,
+ax2.set_title('PCA(GSFM(GTEx_Tissues_V8_2023))')
+fig.legend(
+  markerscale=2,
+  loc="upper center",
+  bbox_to_anchor=(.5, 0),
+  ncol=4,
+  fancybox=True,
 )
-sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+g.legend_.remove()
+plt.savefig('/home/u8sand/Downloads/pca.pdf', bbox_inches='tight')
+plt.show()

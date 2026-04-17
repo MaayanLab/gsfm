@@ -5,7 +5,7 @@ description = "A foundation model trained on gene sets"
 authors = [
   {name = "Daniel J. B. Clarke", email = "danieljbclarkemssm@gmail.com"}
 ]
-license = {text = "BSD-Source-Code"}
+license = {text = "BSD-3-Clause"}
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
